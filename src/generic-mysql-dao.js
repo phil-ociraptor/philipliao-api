@@ -1,93 +1,124 @@
 var mysql = require("mysql");
+var mysqlQueryUtils = require("./mysql-query-utils.js");
 
+/** Class abstracting away the a MySQL table */
 class GenericMysqlDao {
-    constructor(entityName) {
+    
+    /**
+     * @desc Creates a DAO (Data Access Object) for a given entity
+     * 
+     * @param {string} entityName - the name of the table which represents the entity
+     * @param {[string]} fields - the array of field names for the table, order does not matter
+     * @param {mysql-connection-pool} pool - a pool of mysql connections. See https://github.com/felixge/node-mysql
+     */
+    constructor(entityName, fields, pool) {
         this.entityName = entityName;
-        this.dbCredentials = {
-            host: "localhost",
-            user: "root",
-            database: "philipliao"
-        };
+        this.fields = fields;
+        this.pool = pool;
     }
     
+    /**
+     * @desc Given a query, this method executs it via the connection pool
+     * 
+     * @param {string} query - the mysql query to execute
+     * @return {Promise} - a promise resolved with the rows (an array) or rejected with the connection error
+     */
+    executeQuery(query) {
+        var that = this;
+        return new Promise(function (resolve, reject) {
+            that.pool.getConnection(function (err, connection) {
+                connection.query(query, function (err, rows, fields) {
+                    if (err) {
+                        reject(err);
+                    } else {
+                        resolve(rows);
+                    }
+                    connection.release();
+                });
+            });
+        });
+    }
+    
+    /**
+     * @desc Finds all rows in the table
+     * 
+     * @return {Promise} - a promise resolved with the rows (an array) or rejected with the connection error
+     */
     findAll() {
         var queryString = `SELECT * FROM ${this.entityName}`;
-        
-        var mysqlConnection = mysql.createConnection(this.dbCredentials);
-        mysqlConnection.connect(function(err){
-            if(err){
-                console.log('Error connecting to Db');
-                return;
-            }
-            console.log('Connection established');
-        });
-        
-        return new Promise(function (resolve, reject) {
-            mysqlConnection.query(queryString, function (err, rows, fields) {
-                if (err) {
-                    reject(err);
-                } else {
-                    resolve(rows);
-                }
-            });
-            mysqlConnection.end();
-        });
+        return this.executeQuery(queryString); 
     }
 
+    /**
+     * @desc Finds a row in the table. Promise is resolved with an array (will need to get the first elem)
+     * 
+     * @param {number} id - the id of the entity
+     * @return {Promise} - a promise resolved with the row (in an array) or rejected with the connection error
+     */
     findById(id) {
         var queryString = `SELECT * FROM ${this.entityName} WHERE id = ${id}`;
+        return this.executeQuery(queryString);
+    }
+    
+    /**
+     * @desc Creates a new entry in the table
+     * 
+     * @param {object} entity - the new row to create
+     * @return {Promise} - a promise resolved with the result (as an array) or rejected with the connection error
+     */
+    create(entity) {
+        // TODO, move all of these into MYSQL query utils. #testable
+        var escapeIfString = function(str) {
+            var isString = (typeof str === "string");
+            return isString ? "\"" + str + "\"" : str;
+        }
+
+        var fieldsString = this.fields
+            .filter((field) => entity[field] !== undefined)
+            .join(', ');
+            
+        var valuesString = this.fields
+            .filter((field) => entity[field] !== undefined)
+            .map((field) => entity[field])
+            .map(escapeIfString)
+            .join(', ');
+            
+        var queryString = `INSERT INTO ${this.entityName} (${fieldsString}) VALUES (${valuesString})`;
+        return this.executeQuery(queryString);
+    }
+    
+    /**
+     * @desc Updates a row in the table
+     * 
+     * @param {number} id - the id of the row to update
+     * @param {object} entity - the new values with which to overwrite 
+     * @return {Promise} - a promise resolved with the result (as an array) or rejected with the connection error
+     */
+    updateById(id, entity) {
+        // TODO, move all of these into MYSQL query utils. #testable
+        var escapeIfString = function(str) {
+            var isString = (typeof str === "string");
+            return isString ? "\"" + str + "\"" : str;
+        }
         
-        var mysqlConnection = mysql.createConnection(this.dbCredentials);
-        mysqlConnection.connect(function(err){
-            if(err){
-                console.log('Error connecting to Db');
-                return;
-            }
-            console.log('Connection established');
-        });
+        var fieldsToUpdate = this.fields
+            .filter((field) => entity[field] !== undefined)
+            .map((field) => field + "=" + escapeIfString(entity[field]))
+            .join(', ');
         
-        return new Promise(function (resolve, reject) {
-            mysqlConnection.query(queryString, function (err, resp) {
-                if (err) {
-                    reject(err)
-                } else {
-                    resolve(resp);
-                }
-            });
-            mysqlConnection.end();
-        });
+        var queryString = `UPDATE ${this.entityName} SET ${fieldsToUpdate} WHERE id=${id};`;
+        return this.executeQuery(queryString);
     }
     
-    create(newEntity) {
-        //TODO(Phil): unimplemented. Think about how to form this query
-    }
-    
-    updateById(id, newEntity) {
-        //TODO(Phil): unimplemented. Think about how to form this query
-    }
-    
+    /**
+     * @desc Deletes a row in the table
+     * 
+     * @param {number} id - the id of the row to delete
+     * @return {Promise} - a promise resolved with the result (as an array) or rejected with the connection error
+     */
     deleteById(id) {
         var queryString = `DELETE FROM ${this.entityName} WHERE id = ${id}`;
-        
-        var mysqlConnection = mysql.createConnection(this.dbCredentials);
-        mysqlConnection.connect(function(err){
-            if(err){
-                console.log('Error connecting to Db');
-                return;
-            }
-            console.log('Connection established');
-        });
-        
-        return new Promise(function (resolve, reject) {
-            mysqlConnection.query(queryString, function (err, resp) {
-                if (err) {
-                    reject(err)
-                } else {
-                    resolve(resp);
-                }
-            });
-            mysqlConnection.end();
-        });
+        return this.executeQuery(queryString);
     }
 }
 

@@ -1,8 +1,8 @@
 var GenericMysqlDao = require('./generic-mysql-dao.js');
 
 class DummyDao extends GenericMysqlDao {
-    constructor() {
-        super('Dummy');
+    constructor(pool) {
+        super('Dummy', ['id', 'name', 'created'], pool);
     }
 }
 
