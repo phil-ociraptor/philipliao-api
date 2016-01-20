@@ -67,21 +67,8 @@ class GenericMysqlDao {
      * @return {Promise} - a promise resolved with the result (as an array) or rejected with the connection error
      */
     create(entity) {
-        // TODO, move all of these into MYSQL query utils. #testable
-        var escapeIfString = function(str) {
-            var isString = (typeof str === "string");
-            return isString ? "\"" + str + "\"" : str;
-        }
-
-        var fieldsString = this.fields
-            .filter((field) => entity[field] !== undefined)
-            .join(', ');
-            
-        var valuesString = this.fields
-            .filter((field) => entity[field] !== undefined)
-            .map((field) => entity[field])
-            .map(escapeIfString)
-            .join(', ');
+        var fieldsString = mysqlQueryUtils.prepareFields(this.fields, entity),
+            valuesString = mysqlQueryUtils.prepareValues(this.fields, entity);
             
         var queryString = `INSERT INTO ${this.entityName} (${fieldsString}) VALUES (${valuesString})`;
         return this.executeQuery(queryString);
@@ -94,17 +81,8 @@ class GenericMysqlDao {
      * @param {object} entity - the new values with which to overwrite 
      * @return {Promise} - a promise resolved with the result (as an array) or rejected with the connection error
      */
-    updateById(id, entity) {
-        // TODO, move all of these into MYSQL query utils. #testable
-        var escapeIfString = function(str) {
-            var isString = (typeof str === "string");
-            return isString ? "\"" + str + "\"" : str;
-        }
-        
-        var fieldsToUpdate = this.fields
-            .filter((field) => entity[field] !== undefined)
-            .map((field) => field + "=" + escapeIfString(entity[field]))
-            .join(', ');
+    updateById(id, entity) {        
+        var fieldsToUpdate = mysqlQueryUtils.prepareFieldsToValues(this.fields, entity);
         
         var queryString = `UPDATE ${this.entityName} SET ${fieldsToUpdate} WHERE id=${id};`;
         return this.executeQuery(queryString);
